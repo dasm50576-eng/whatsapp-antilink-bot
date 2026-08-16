@@ -5,8 +5,21 @@ const {
 } = require("@whiskeysockets/baileys");
 
 const P = require("pino");
+const http = require("http");
 
 const BOT_NUMBER = process.env.BOT_NUMBER;
+
+// Render-এর জন্য HTTP server
+const PORT = process.env.PORT || 10000;
+
+http.createServer((req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/plain"
+  });
+  res.end("WhatsApp Anti-Link Bot is running!");
+}).listen(PORT, "0.0.0.0", () => {
+  console.log(`🌐 Server running on port ${PORT}`);
+});
 
 async function startBot() {
   const { state, saveCreds } =
@@ -20,7 +33,7 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  // WhatsApp account এখনো যুক্ত না থাকলে Pairing Code তৈরি করবে
+  // WhatsApp account যুক্ত না থাকলে Pairing Code
   if (!state.creds.registered) {
     if (!BOT_NUMBER) {
       console.log("❌ BOT_NUMBER সেট করা নেই!");
@@ -101,7 +114,7 @@ async function startBot() {
         (p) => p.id === sender
       );
 
-      // Admin-এর link allow করবে
+      // Admin-এর link allow
       if (member?.admin) {
         console.log("👑 Admin link allowed");
         return;
@@ -121,7 +134,7 @@ async function startBot() {
           "⚠️ Anti-Link Bot মেসেজটি ডিলিট করেছে।"
       });
 
-      // 10 সেকেন্ড পরে warning-ও delete
+      // 10 সেকেন্ড পরে warning delete
       setTimeout(async () => {
         try {
           await sock.sendMessage(jid, {
