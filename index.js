@@ -7,17 +7,13 @@ const {
 const P = require("pino");
 const http = require("http");
 
+const PORT = process.env.PORT || 10000;
 const BOT_NUMBER = process.env.BOT_NUMBER;
 
-// Render-এর জন্য HTTP server
-const PORT = process.env.PORT || 10000;
-
 http.createServer((req, res) => {
-  res.writeHead(200, {
-    "Content-Type": "text/plain"
-  });
+  res.writeHead(200, { "Content-Type": "text/plain" });
   res.end("WhatsApp Anti-Link Bot is running!");
-}).listen(PORT, "0.0.0.0", () => {
+}).listen(PORT, () => {
   console.log(`🌐 Server running on port ${PORT}`);
 });
 
@@ -33,7 +29,6 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds);
 
-  // WhatsApp account যুক্ত না থাকলে Pairing Code
   if (!state.creds.registered) {
     if (!BOT_NUMBER) {
       console.log("❌ BOT_NUMBER সেট করা নেই!");
@@ -53,7 +48,6 @@ async function startBot() {
         console.log(code);
         console.log("================================");
         console.log("WhatsApp > Linked Devices > Link a device");
-        console.log("তারপর Pairing Code ব্যবহার করো।");
       } catch (error) {
         console.log("❌ Pairing Code Error:", error.message);
       }
@@ -90,7 +84,6 @@ async function startBot() {
 
     const jid = msg.key.remoteJid;
 
-    // শুধু Group-এ কাজ করবে
     if (!jid || !jid.endsWith("@g.us")) return;
 
     const text =
@@ -107,34 +100,29 @@ async function startBot() {
 
     try {
       const metadata = await sock.groupMetadata(jid);
-
       const sender = msg.key.participant;
 
       const member = metadata.participants.find(
         (p) => p.id === sender
       );
 
-      // Admin-এর link allow
       if (member?.admin) {
         console.log("👑 Admin link allowed");
         return;
       }
 
-      // Link message delete
       await sock.sendMessage(jid, {
         delete: msg.key
       });
 
       console.log("🚫 Link deleted");
 
-      // Warning
       const warning = await sock.sendMessage(jid, {
         text:
           "🚫 লিংক পাঠানো নিষেধ!\n\n" +
           "⚠️ Anti-Link Bot মেসেজটি ডিলিট করেছে।"
       });
 
-      // 10 সেকেন্ড পরে warning delete
       setTimeout(async () => {
         try {
           await sock.sendMessage(jid, {
