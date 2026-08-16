@@ -6,14 +6,11 @@ const {
 
 const P = require("pino");
 
-const GROUP_NAME = "পানু বাঁচ ছেলে";
-
-// যেসব মেসেজে লিংক থাকলে ডিলিট হবে
-const URL_REGEX =
-  /(https?:\/\/[^\s]+|www\.[^\s]+|chat\.whatsapp\.com\/[^\s]+|t\.me\/[^\s]+)/i;
+const BOT_NUMBER = process.env.BOT_NUMBER;
 
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState("./auth_info");
+  const { state, saveCreds } =
+    await useMultiFileAuthState("./auth_info");
 
   const sock = makeWASocket({
     auth: state,
@@ -23,12 +20,39 @@ async function startBot() {
 
   sock.ev.on("creds.update", saveCreds);
 
+  // WhatsApp account এখনো যুক্ত না থাকলে Pairing Code তৈরি করবে
+  if (!state.creds.registered) {
+    if (!BOT_NUMBER) {
+      console.log("❌ BOT_NUMBER সেট করা নেই!");
+      return;
+    }
+
+    const phoneNumber = BOT_NUMBER.replace(/\D/g, "");
+
+    setTimeout(async () => {
+      try {
+        const code = await sock.requestPairingCode(phoneNumber);
+
+        console.log("");
+        console.log("================================");
+        console.log("🔐 WHATSAPP PAIRING CODE");
+        console.log("================================");
+        console.log(code);
+        console.log("================================");
+        console.log("WhatsApp > Linked Devices > Link a device");
+        console.log("তারপর Pairing Code ব্যবহার করো।");
+      } catch (error) {
+        console.log("❌ Pairing Code Error:", error.message);
+      }
+    }, 3000);
+  }
+
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update;
 
     if (connection === "open") {
-      console.log("✅ WhatsApp Bot Connected!");
-      console.log("🛡️ Anti-Link Protection is ON");
+      console.log("✅ WhatsApp Connected!");
+      console.log("🛡️ Anti-Link Bot is ON");
     }
 
     if (connection === "close") {
@@ -53,7 +77,7 @@ async function startBot() {
 
     const jid = msg.key.remoteJid;
 
-    // শুধু WhatsApp Group-এ কাজ করবে
+    // শুধু Group-এ কাজ করবে
     if (!jid || !jid.endsWith("@g.us")) return;
 
     const text =
@@ -63,7 +87,10 @@ async function startBot() {
       msg.message.videoMessage?.caption ||
       "";
 
-    if (!URL_REGEX.test(text)) return;
+    const hasLink =
+      /(https?:\/\/|www\.|chat\.whatsapp\.com\/|t\.me\/)/i.test(text);
+
+    if (!hasLink) return;
 
     try {
       const metadata = await sock.groupMetadata(jid);
@@ -74,25 +101,27 @@ async function startBot() {
         (p) => p.id === sender
       );
 
-      // Admin হলে লিংক পাঠাতে পারবে
+      // Admin-এর link allow করবে
       if (member?.admin) {
         console.log("👑 Admin link allowed");
         return;
       }
 
-      // লিংক পাঠানো সদস্যের মেসেজ ডিলিট
+      // Link message delete
       await sock.sendMessage(jid, {
         delete: msg.key
       });
 
-      console.log("🚫 Link deleted from:", sender);
+      console.log("🚫 Link deleted");
 
-      // Warning message
+      // Warning
       const warning = await sock.sendMessage(jid, {
-        text: "🚫 লিংক পাঠানো নিষেধ!\n\n⚠️ Anti-Link Bot মেসেজটি ডিলিট করেছে।"
+        text:
+          "🚫 লিংক পাঠানো নিষেধ!\n\n" +
+          "⚠️ Anti-Link Bot মেসেজটি ডিলিট করেছে।"
       });
 
-      // Warning 10 সেকেন্ড পরে মুছে ফেলবে
+      // 10 সেকেন্ড পরে warning-ও delete
       setTimeout(async () => {
         try {
           await sock.sendMessage(jid, {
@@ -102,7 +131,7 @@ async function startBot() {
       }, 10000);
 
     } catch (error) {
-      console.log("❌ Delete error:", error.message);
+      console.log("❌ Delete Error:", error.message);
     }
   });
 }
